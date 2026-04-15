@@ -1,0 +1,62 @@
+name: Build Snapzor Windows
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:  # Permet de lancer manuellement depuis l'interface GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout du code
+        uses: actions/checkout@v4
+
+      - name: Installation de Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Installation des dépendances
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Génération de l'icône .ico
+        run: |
+          python -c "from PIL import Image; img = Image.open('snapzor/Snapzor.png'); img.save('Snapzor.ico', sizes=[(16,16),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
+      - name: Build PyInstaller
+        run: pyinstaller --noconfirm Snapzor.spec
+
+      - name: Installation d'Inno Setup
+        run: choco install innosetup -y --no-progress
+
+      - name: Construction de l'installeur
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" Snapzor.iss
+
+      - name: Upload de la version portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snapzor-portable
+          path: dist/Snapzor/
+
+      - name: Upload de l'installeur
+        uses: actions/upload-artifact@v4
+        with:
+          name: Snapzor-installer
+          path: Output/*.exe
+
+      # Si tu pousses un tag (ex: v1.0.0), crée automatiquement une release
+      - name: Création d'une Release GitHub
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            Output/*.exe
+          generate_release_notes: true
